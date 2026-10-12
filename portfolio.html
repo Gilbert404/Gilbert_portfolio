@@ -22,7 +22,7 @@
 <style>
   /* Dark theme (default): soft slate-navy, never pure black or pure white */
   :root {
-    color-scheme: dark;
+    color-scheme: light;
     --bg: #0F172A;
     --surface: #1B2638;
     --surface-2: #25324A;
@@ -109,6 +109,7 @@
   .btn:hover { border-color: var(--accent); color: var(--text); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .btn.primary:hover { filter: brightness(1.12); color: var(--on-accent); }
+  .btn:disabled { opacity: .6; cursor: progress; }
   .btn svg { width: 18px; height: 18px; }
 
   /* Hero */
@@ -348,10 +349,7 @@
         <li><a href="#contact">Contact</a></li>
       </ul>
     </nav>
-    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark theme">
-      <svg class="i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
-      <svg class="i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
-    </button>
+    
   </div>
 </header>
 
@@ -535,12 +533,13 @@
         </ul>
 
         <form id="contactForm" novalidate>
+          <input type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
           <div class="field"><label for="cName">Your name</label><input id="cName" name="name" type="text" autocomplete="name" required></div>
           <div class="field"><label for="cEmail">Your email</label><input id="cEmail" name="email" type="email" autocomplete="email" required></div>
           <div class="field"><label for="cMsg">Message</label><textarea id="cMsg" name="message" required></textarea></div>
           <div class="field">
             <button class="btn primary" type="submit"><svg aria-hidden="true"><use href="#i-send"/></svg>Send message</button>
-            <p class="form-note" id="formNote" role="status" aria-live="polite">This opens your email app with the message ready to send.</p>
+            <p class="form-note" id="formNote" role="status" aria-live="polite">Your message is sent straight to my email inbox.</p>
           </div>
         </form>
       </div>
@@ -617,18 +616,48 @@
     links.forEach(function (a) { var s = document.querySelector(a.getAttribute('href')); if (s) io.observe(s); });
   }
 
-  // Contact form opens the visitor's email app
+  // Contact form: sends the message to the owner's inbox (FormSubmit), falls back to the visitor's email app
+  var OWNER_EMAIL = 'gilbertkaranganwa15@gmail.com';
   var form = document.getElementById('contactForm');
   var note = document.getElementById('formNote');
+  var sendBtn = form.querySelector('button[type="submit"]');
+  function openMailApp(name, email, msg) {
+    var subject = 'Portfolio message from ' + name;
+    var body = msg + '\n\nFrom: ' + name + ' (' + email + ')';
+    window.location.href = 'mailto:' + OWNER_EMAIL + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  }
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var name = form.name.value.trim(), email = form.email.value.trim(), msg = form.message.value.trim();
+    if (form._honey && form._honey.value) return; // spam trap
     if (!name || !email || !msg) { note.textContent = 'Fill in your name, email and message first.'; return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { note.textContent = 'Enter a valid email address.'; return; }
-    var subject = 'Portfolio message from ' + name;
-    var body = msg + '\n\nFrom: ' + name + ' (' + email + ')';
-    window.location.href = 'mailto:gilbertkaranganwa15@gmail.com?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-    note.textContent = 'Your email app should open with the message ready to send.';
+
+    sendBtn.disabled = true;
+    note.textContent = 'Sending your message...';
+    fetch('https://formsubmit.co/ajax/' + OWNER_EMAIL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        email: email,
+        message: msg,
+        _subject: 'New portfolio message from ' + name,
+        _template: 'table',
+        _captcha: 'false'
+      })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('Request failed');
+      return res.json();
+    }).then(function () {
+      form.reset();
+      note.textContent = 'Thank you! Your message was sent and I will reply soon.';
+    }).catch(function () {
+      note.textContent = 'The message could not be sent from here, so your email app will open instead.';
+      openMailApp(name, email, msg);
+    }).then(function () {
+      sendBtn.disabled = false;
+    });
   });
 })();
 </script>
